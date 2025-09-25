@@ -10,6 +10,34 @@ const progressBar = document.getElementById("progressBar");
 const getFavouritesBtn = document.getElementById("getFavouritesBtn");
 // Step 0: Store your API key here for reference and easy access.
 const API_KEY = "live_u7nyo5DWRTggHsqkqixUiNKOyGxm16faH9GBWMay7DKw3BrrDGIq3B83k2VnUVSQ";
+
+axios.defaults.baseURL = 'https://api.thecatapi.com/v1/';
+
+// axios.defaults.headers.common['Authorization'] = AUTH_TOKEN;
+
+axios.defaults.headers.post['Content-Type'] = 'application/x-www-form-urlencoded';
+
+const options = {
+// Defines options for request
+
+  // responseType: 'blob',
+  // For a file (e.g. image, audio), response should be read to Blob (default to JS object from JSON)
+
+  onDownloadProgress: function(progressEvent) {
+  // Function fires when there is download progress
+console.log(progressEvent);
+// progressBar.style.width = "100%";
+      // console.log(Math.floor(progressEvent.loaded / progressEvent.total));
+      // Logs percentage complete to the console
+
+  }
+
+}
+
+// function uploadProgress(progressEvent) {
+
+// } 
+
 /**
 * 1. Create an async function "initialLoad" that does the following:
 * - Retrieve a list of breeds from the cat API using fetch().
@@ -18,19 +46,22 @@ const API_KEY = "live_u7nyo5DWRTggHsqkqixUiNKOyGxm16faH9GBWMay7DKw3BrrDGIq3B83k2
 *  - Each option should display text equal to the name of the breed.
 * This function should execute immediately.
 */
+
+
 async function initialLoad() {
 
   try {
-    const response = await fetch("https://api.thecatapi.com/v1/breeds");
-    if (!response.ok) {
+    const response = await axios.get("https://api.thecatapi.com/v1/breeds", options);
+    if (!response.status) {
       throw new Error("HTTP error! status: " + response.status);
     }
-    const breeds = await response.json();
+    const breeds = await response.data;
+    console.log(breeds);
     breeds.forEach((breed) => {
-      const options = document.createElement("option");
-      options.value = breed.id;
-      options.textContent = breed.name;
-      breedSelect.appendChild(options);
+      const optionsEl = document.createElement("option");
+      optionsEl.value = breed.id;
+      optionsEl.textContent = breed.name;
+      breedSelect.appendChild(optionsEl);
     }); 
       handleBreedSelect(breeds[0].id);
   } catch (error) {
@@ -65,31 +96,36 @@ async function handleBreedSelect(event) {
   }
   try {
     // Fetch multiple images for the selected breed
-    const response = await fetch(
-      `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=5`
-    );
-    if (!response.ok) {
+    // const response = await fetch(
+    //   `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=5`
+    // );
+    const response = await axios({method: 'get', url:`https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=5`});
+    console.log(response);
+    if (!response.status) {
       throw new Error("HTTP error! status: " + response.status);
     }
-    const images = await response.json();
+    const images = response.data;
     console.log(images); // check API response
     // Clear old carousel items
     clear();
     // Add each image to carousel
     images.forEach((imgObj) => {
-      console.log(imgObj)
+    //   console.log(imgObj)
       const carouselItem = createCarouselItem(imgObj.url,"Cat Image",imgObj.id);
       appendCarousel(carouselItem);
     });
     // Fetch breed info
-    const breedResponse = await fetch(`https://api.thecatapi.com/v1/breeds/${breedId}`);
-    const breedInfo = await breedResponse.json();
+    // const breedResponse = await fetch(`https://api.thecatapi.com/v1/breeds/${breedId}`);
+    const breedResponse = await axios.get(`https://api.thecatapi.com/v1/breeds/${breedId}`)
+    console.log(breedResponse); // object returned from axios.get request
+    console.log(breedResponse.data.name); // locate breed name
+    // const breedInfo = await breedResponse.json();
     // Breed info in infoDump (safely check)
       infoDump.innerHTML = `
-        <h2>${breedInfo.name}</h2>
-        <p><strong>Origin:</strong> ${breedInfo.origin}</p>
-        <p><strong>Temperament:</strong> ${breedInfo.temperament}</p>
-        <p><strong>Description:</strong> ${breedInfo.description}</p>
+        <h2>${breedResponse.data.name}</h2>
+        <p><strong>Origin:</strong> ${breedResponse.data.origin}</p>
+        <p><strong>Temperament:</strong> ${breedResponse.data.temperament}</p>
+        <p><strong>Description:</strong> ${breedResponse.data.description}</p>
       `;
     // Restart carousel
     start();
@@ -97,6 +133,8 @@ async function handleBreedSelect(event) {
     console.log("Error fetching data: " + error);
   }
 }
+
+
 /**
  * 3. Fork your own sandbox, creating a new one named "JavaScript Axios Lab."
  */
@@ -118,6 +156,35 @@ async function handleBreedSelect(event) {
  * - Add a console.log statement to indicate when requests begin.
  * - As an added challenge, try to do this on your own without referencing the lesson material.
  */
+axios.interceptors.request.use(request => {
+    request.metadata = request.metadata || {};
+    request.metadata.startTime = new Date().getTime();
+    const date = new Date(request.metadata.startTime);
+    console.log(`Request began at ${date.toLocaleTimeString()}`);
+    progressBar.style.width = "0%";
+    document.querySelector("body").style.cursor = "progress";
+    console.log(progressBar);
+    return request;
+});
+
+axios.interceptors.response.use(
+    (response) => {
+        response.config.metadata.endTime = new Date().getTime();
+        response.config.metadata.durationInMS = response.config.metadata.endTime - response.config.metadata.startTime;
+
+        console.log(`Request took ${response.config.metadata.durationInMS} milliseconds.`)
+        progressBar.style.width = "100%";
+        document.querySelector("body").style.cursor = ""
+
+        return response;
+    },
+    (error) => {
+        error.config.metadata.endTime = new Date().getTime();
+        error.config.metadata.durationInMS = error.config.metadata.endTime - error.config.metadata.startTime;
+
+        console.log(`Request took ${error.config.metadata.durationInMS} milliseconds.`)
+        throw error;
+});
 
 /**
  * 6. Next, we'll create a progress bar to indicate the request is in progress.
@@ -170,5 +237,4 @@ export async function favourite(imgId) {
  * - What happens when you try to load the Malayan breed?
  *  - If this is working, good job! If not, look for the reason why and fix it!
  * - Test other breeds as well. Not every breed has the same data available, so
- *   your code should account for this.
- */
+ *   your code should account for */
